@@ -11,7 +11,7 @@ interface ApiResponseItem {
     inputs?: string;
 }
 
-export const useSuggestions = (query: string) => {
+export const useSuggestions = (query: string, isOperator = false) => {
     return useQuery({
         queryKey: ['suggestions', query],
         queryFn: async (): Promise<SuggestionItem[]> => {
@@ -27,7 +27,7 @@ export const useSuggestions = (query: string) => {
                 value: item.value
             }));
         },
-        enabled: query.length > 0,
+        enabled: isOperator ? query.length >= 0 : query.length > 0,
         staleTime: 60 * 1000,
     });
 };

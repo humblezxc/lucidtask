@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, KeyboardEvent } from 'react';
+import {useState, useRef, KeyboardEvent, useEffect} from 'react';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { useFormulaStore } from '@/stores/formulaStore';
 import { TagWithDropdown } from './TagWithDropdown';
@@ -10,8 +10,10 @@ import { SuggestionItem } from '@/types/suggestions';
 export function FormulaInput() {
     const { tags, input, addTag, removeTag, setInput } = useFormulaStore();
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [isOperator, setIsOperator] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
-    const { data: suggestions, isLoading } = useSuggestions(input);
+
+    const { data: suggestions, isLoading } = useSuggestions(input, isOperator);
 
     const handleAddTag = (item: SuggestionItem | string) => {
         if (typeof item === 'string') {
@@ -69,6 +71,11 @@ export function FormulaInput() {
         handleAddTag(item);
     };
 
+    useEffect(() => {
+        const lastTag = tags[tags.length - 1];
+        setIsOperator(lastTag && ['+', '-', '*', '/', '^', '(', ')'].includes(lastTag.value as string))
+    }, [tags, isOperator, input]);
+
     return (
         <div className="w-full max-w-2xl p-4 mx-auto space-y-4">
             <label className="block text-sm font-medium text-gray-700">Formula</label>
@@ -93,7 +100,7 @@ export function FormulaInput() {
                     />
                 </div>
 
-                {showSuggestions && input.length > 0 && (
+                {showSuggestions && (
                     <div className="absolute z-10 w-full mt-1 overflow-auto bg-white rounded-md shadow-lg max-h-60 ring-1 ring-black ring-opacity-5">
                         {isLoading ? (
                             <div className="px-4 py-2 text-gray-500">Loading...</div>
