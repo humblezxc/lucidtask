@@ -3,6 +3,7 @@ export interface SuggestionItem {
     name: string;
     category: string;
     value: string | number;
+    type?: 'variable' | 'number' | 'operator';
 }
 
 export type TagType = 'variable' | 'number' | 'operator';

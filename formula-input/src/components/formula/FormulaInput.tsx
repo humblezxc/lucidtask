@@ -4,13 +4,46 @@ import { useState, useRef, KeyboardEvent } from 'react';
 import { useSuggestions } from '@/hooks/useSuggestions';
 import { useFormulaStore } from '@/stores/formulaStore';
 import { TagWithDropdown } from './TagWithDropdown';
+import { evaluateFormula } from '@/utils/evaluateFormula';
+import { SuggestionItem } from '@/types/suggestions';
 
 export function FormulaInput() {
     const { tags, input, addTag, removeTag, setInput } = useFormulaStore();
     const [showSuggestions, setShowSuggestions] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
-
     const { data: suggestions, isLoading } = useSuggestions(input);
+
+    const handleAddTag = (item: SuggestionItem | string) => {
+        if (typeof item === 'string') {
+            const isNumber = !isNaN(Number(item));
+            addTag({
+                id: `${item}-${Date.now()}`,
+                name: item,
+                category: isNumber ? 'number' : 'variable',
+                value: isNumber ? Number(item) : item,
+                type: isNumber ? 'number' : 'variable'
+            });
+        } else {
+            const isNumber = !isNaN(Number(item.value));
+            addTag({
+                ...item,
+                value: item.value || item.name,
+                type: isNumber ? 'number' : 'variable'
+            });
+        }
+        setInput('');
+        inputRef.current?.focus();
+    };
+
+    const handleAddOperator = (operator: string) => {
+        addTag({
+            id: `op-${Date.now()}`,
+            name: operator,
+            category: 'operator',
+            value: operator,
+            type: 'operator'
+        });
+    };
 
     const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Backspace' && input === '' && tags.length > 0) {
@@ -18,32 +51,26 @@ export function FormulaInput() {
             return;
         }
 
-        if (e.key === ' ' || ['+', '-', '*', '/', '^', '(', ')'].includes(e.key)) {
-            if (input.trim() !== '') {
-                addTag({
-                    id: `${input}-${Date.now()}`,
-                    name: input.trim(),
-                    category: '',
-                    value: '',
-                    type: isNaN(Number(input.trim())) ? 'variable' : 'number'
-                });
-            }
+        if (e.key === ' ' && input.trim() !== '') {
+            handleAddTag(input.trim());
+            e.preventDefault();
+        }
 
-            if (['+', '-', '*', '/', '^', '(', ')'].includes(e.key)) {
-                addTag({
-                    id: `op-${Date.now()}`,
-                    name: e.key,
-                    category: 'operator',
-                    value: e.key,
-                    type: 'operator'
-                });
-                e.preventDefault();
+        if (['+', '-', '*', '/', '^', '(', ')'].includes(e.key)) {
+            if (input.trim() !== '') {
+                handleAddTag(input.trim());
             }
+            handleAddOperator(e.key);
+            e.preventDefault();
         }
     };
 
+    const handleSuggestionSelect = (item: SuggestionItem) => {
+        handleAddTag(item);
+    };
+
     return (
-        <div className="w-full max-w-2xl p-4 mx-auto space-y-2">
+        <div className="w-full max-w-2xl p-4 mx-auto space-y-4">
             <label className="block text-sm font-medium text-gray-700">Formula</label>
 
             <div className="relative">
@@ -51,8 +78,8 @@ export function FormulaInput() {
                     className="flex flex-wrap items-center gap-2 p-3 border border-gray-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 min-h-12 bg-white"
                     onClick={() => inputRef.current?.focus()}
                 >
-                    {tags.map((tag) => (
-                        <TagWithDropdown key={tag.id} tag={tag} />
+                    {tags.map((tag, index) => (
+                        <TagWithDropdown key={`${tag.id}-${index}`} tag={tag} />
                     ))}
                     <input
                         ref={inputRef}
@@ -78,18 +105,14 @@ export function FormulaInput() {
                                     key={item.id}
                                     className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                     onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => {
-                                        addTag({
-                                            ...item,
-                                            type: 'variable'
-                                        });
-                                        setInput('');
-                                        inputRef.current?.focus();
-                                    }}
+                                    onClick={() => handleSuggestionSelect(item)}
                                 >
                                     <div className="font-medium">{item.name}</div>
                                     {item.category && (
                                         <div className="text-xs text-gray-500">{item.category}</div>
+                                    )}
+                                    {item.value && (
+                                        <div className="text-xs text-gray-500">Value: {item.value}</div>
                                     )}
                                 </div>
                             ))
@@ -98,9 +121,37 @@ export function FormulaInput() {
                 )}
             </div>
 
-            <div className="text-sm text-gray-500">
-                <p>Available operators: + - * / ^ ( )</p>
-                <p>Press space to complete variables</p>
+            <div className="flex items-center justify-between text-sm text-gray-500">
+                <div>
+                    <p>Available operators: + - * / ^ ( )</p>
+                    <p>Press space to complete variables</p>
+                </div>
+                <div className="text-right">
+                    <p>Tags: {tags.length} (N: {tags.filter(t => t.type === 'number').length},
+                        V: {tags.filter(t => t.type === 'variable').length},
+                        O: {tags.filter(t => t.type === 'operator').length})</p>
+                </div>
+            </div>
+
+            <div className="p-3 border rounded bg-gray-50">
+                <div className="flex items-center justify-between">
+                    <h3 className="font-medium">Formula Evaluation</h3>
+                    <div className="text-sm text-gray-500">
+                        {tags.length > 0 ? `${tags.length} elements` : 'Empty formula'}
+                    </div>
+                </div>
+                <div className="mt-2 p-2 bg-white rounded border">
+                    <div className="text-sm text-gray-500">Expression:</div>
+                    <div className="font-mono text-sm">
+                        {tags.map(t => t.value || t.name).join(' ')}
+                    </div>
+                </div>
+                <div className="mt-2 p-2 bg-white rounded border">
+                    <div className="text-sm text-gray-500">Result:</div>
+                    <div className="text-xl font-bold">
+                        {evaluateFormula(tags)}
+                    </div>
+                </div>
             </div>
         </div>
     );
